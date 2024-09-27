@@ -1,3 +1,22 @@
+import Product from "./../models/product.model.js";
+
+export const getCartProducts = async (req, res) => {
+  try {
+    const products = await Product.find({ _id: { $in: req.user.cartItems } });
+
+    const cartItems = products.map((product) => {
+      const item = req.user.cartItems.find(
+        (cartItems) => cartItems.id == product._id
+      );
+      return { ...product.toJSON(), quantity: item.quantity };
+    });
+    res.json(cartItems);
+  } catch (error) {
+    console.log("Error in getCartProducts controller", error.message);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 export const addToCart = async (req, res) => {
   try {
     const { productId } = req.body;
@@ -60,5 +79,3 @@ export const updateQuantity = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
-export const getCartProducts = async (req, res) => {};
