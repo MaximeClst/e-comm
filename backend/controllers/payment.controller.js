@@ -1,6 +1,7 @@
 import { stripe } from "../lib/stripe.js";
 
 import Coupon from "../models/coupon.model.js";
+import Order from "./../models/order.model.js";
 
 export const createCheckoutSession = async (req, res) => {
   try {
@@ -58,6 +59,13 @@ export const createCheckoutSession = async (req, res) => {
       metadata: {
         userId: req.user._id.toString(),
         couponCode: couponCode || "",
+        products: JSON.stringify(
+          product.map((p) => ({
+            id: p._id,
+            quantity: p.quantity,
+            price: p.price,
+          }))
+        ),
       },
     });
 
@@ -65,7 +73,13 @@ export const createCheckoutSession = async (req, res) => {
       await createNewCoupon(req.user._id);
     }
     res.status(200).json({ id: session.id, totalAmount: totalAmount / 100 });
-  } catch (error) {}
+  } catch (error) {
+    console.log("Error processing successful checkout", error);
+    res.status(500).json({
+      message: "Error processing successful checkout",
+      error: error.message,
+    });
+  }
 };
 
 export const checkoutSuccess = async (req, res) => {
@@ -85,8 +99,34 @@ export const checkoutSuccess = async (req, res) => {
           }
         );
       }
+      // create new Order
+      const products = JSON.parse(session.metadata.products);
+      const newOrder = new Order({
+        user: session.metadata.userId,
+        products: products.map((product) => ({
+          product: product.id,
+          quantity: product.quantity,
+          price: product.price,
+        })),
+        totalAmount: session.amount_total / 100,
+        stripeSessionId: session.id,
+      });
+
+      await newOrder.save();
+      res.status(200).json({
+        success: true,
+        message:
+          "Payment successful, order created and coupon desactivated if used",
+        orderId: newOrder._id,
+      });
     }
-  } catch (error) {}
+  } catch (error) {
+    console.log("Error processing successful checkout", error);
+    res.status(500).json({
+      message: "Error processing successful checkout",
+      error: error.message,
+    });
+  }
 };
 
 async function createStripeCoupon(discountPercentage) {
